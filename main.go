@@ -46,6 +46,8 @@ type Link struct {
 	IsGame bool `json:"isGame"`
 }
 
+// Filters a list based on whether f applied to a member of s is true or false. Some people can't
+// go without their functional convienences... : (
 func filter[T comparable](s []T, f func(T) bool) []T {
 	var acc []T
 	for i := 0; i < len(s); i++ {
@@ -55,10 +57,22 @@ func filter[T comparable](s []T, f func(T) bool) []T {
 	}
 	return acc
 }
-	
-// func validatedPrompt(prompt string, f func(string) (string, error)) {
-	
-// }
+
+//
+func validatedPrompt(prompt string, f func(string) (string, error)) string {
+	scanner := bufio.NewScanner(os.Stdin)
+	fmt.Print(prompt)
+	text := scanner.Text()
+	for {
+		if newPrompt, err := f(text); err != nil {
+			fmt.Print(newPrompt)
+			text = scanner.Text()
+			continue
+		}
+		break
+	}
+	return text
+}
 func gameSearch(term string) SearchGamesList {
 	query := "https://ifdb.org/search?json&" + url.Values{"searchfor": {term}}.Encode()
 	res, err := http.Get(query)
@@ -78,10 +92,13 @@ func gameSearch(term string) SearchGamesList {
 	return list
 }
 	
-func download(link Link) {
+func download(link Link, path string) {
 	res, _ := http.Get(link.Url)
 	body, _ := io.ReadAll(res.Body)
-	_ = os.WriteFile(link.Title, body, 0666)
+	err := os.WriteFile(path, body, 0666)
+	if err != nil {
+		fmt.Println("Failed to download file: do you have enough storage?")
+	}
 }
 
 func searchPrompt(list SearchGamesList) (string, error) {
@@ -183,13 +200,15 @@ func main() {
 		downloads := filter(game.Ifdb.Downloads.Links, func (l Link) bool {
 			return l.IsGame
 		})
-
+		scanner := bufio.NewScanner(os.Stdin)			
 		switch {
 		case len(downloads) == 0:
 			fmt.Println("No download links found... :(")
 		case len(downloads) == 1:
-			fmt.Println("One download link found. Downloading...")
-			download(downloads[0])
+			fmt.Printf("One download link found. (%v, %v)\n", downloads[0].Title, downloads[0].Format)
+			fmt.Println("Please enter the full path where the file should go, including the file name: ")
+			scanner.Scan()
+			download(downloads[0], scanner.Text())
 		default:
 			var number int
 			fmt.Println("There are multiple downloads avaliable:");
@@ -205,7 +224,10 @@ func main() {
 				}
 				break
 			}
-			download(downloads[number])
+
+			fmt.Println("Please enter the path where the file should go, including the file name:")
+			scanner.Scan()
+			download(downloads[number], scanner.Text())
 		}		
 	}
 }

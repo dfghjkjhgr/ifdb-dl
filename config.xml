@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<extension>
+	<information>
+		<name>IFDB-dl</name>
+		<version>0.1</version>
+		<author>NegativeSector</author>
+		<id>ifdb-dl</id>
+	</information>
+	<menus>
+		<menu type="json" dynamic="true">menu.json</menu>
+	</menus>
+</extension>

@@ -1,0 +1,5 @@
+{
+	"items": [
+		{"name": "KindleFetch", "action": "sh run.sh"}
+	]
+}
