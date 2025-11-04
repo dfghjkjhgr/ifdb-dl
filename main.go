@@ -11,6 +11,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"path"
 )
 
 type SearchGame struct {
@@ -58,6 +59,24 @@ func filter[T comparable](s []T, f func(T) bool) []T {
 	return acc
 }
 
+func downloadsPrompt(number int, downloads []Link) {
+	scanner := bufio.NewScanner(os.Stdin)
+	downloadUrl, _ := url.Parse(downloads[number].Url) // If it doesn't parse we'll probably have strange problems down the line
+	defaultFileName := getFileName(path.Base(downloadUrl.Path), downloads[number].Title)
+	fmt.Printf("File name? (default: %v)", defaultFileName)
+	scanner.Scan()
+	name := scanner.Text()
+	if name == "" {
+		name = defaultFileName
+	}	
+	fmt.Printf("File path? (default: '/mnt/us/extensions/gargoyle/games/) ")
+	scanner.Scan()
+	filePath := scanner.Text()
+	if filePath == "" {
+		filePath = "/mnt/us/extensions/gargoyle/games/"
+	}	
+	download(downloads[number], path.Join(filePath, name))
+}
 // 
 func validatedPrompt(prompt string, f func(string) (string, error)) string {
 	scanner := bufio.NewScanner(os.Stdin)
@@ -116,6 +135,14 @@ func ynPrompt(prompt string) bool {
 			fmt.Printf("Please enter yes or no: ")
 			scanner.Scan()
 		}
+	}
+}
+
+func getFileName(pathStr string, def string) string {
+	if path.Base(pathStr) != "." {
+		return path.Base(pathStr)
+	} else {
+		return def
 	}
 }
 
@@ -249,8 +276,19 @@ competitionid:id lists games in a competition with the given id. `);
 	default:
 		// Get API data from server
 		scanner := bufio.NewScanner(os.Stdin)
+		fmt.Println(`
+ /$$  /$$$$$$  /$$$$$$$  /$$$$$$$          /$$$$$$$  /$$      
+|__/ /$$__  $$| $$__  $$| $$__  $$        | $$__  $$| $$      
+ /$$| $$  \__/| $$  \ $$| $$  \ $$        | $$  \ $$| $$      
+| $$| $$$$    | $$  | $$| $$$$$$$  /$$$$$$| $$  | $$| $$      
+| $$| $$_/    | $$  | $$| $$__  $$|______/| $$  | $$| $$      
+| $$| $$      | $$  | $$| $$  \ $$        | $$  | $$| $$      
+| $$| $$      | $$$$$$$/| $$$$$$$/        | $$$$$$$/| $$$$$$$$
+|__/|__/      |_______/ |_______/         |_______/ |________/
+                                                              `)
 		fmt.Println("WELCOME TO IFDB-DL! Download your favorite IF games here! Type in your search or Ctrl-C to exit.")
-		gameTUID, err := searchPrompt(gameSearch(Scanner.Scan().Text()));
+		scanner.Scan()
+		gameTUID, err := searchPrompt(gameSearch(scanner.Text()));
 		if err != nil {
 			// if the program ends, that means that we didn't find any results...
 			return;
@@ -277,9 +315,8 @@ competitionid:id lists games in a competition with the given id. `);
 			fmt.Println("No download links found... :(")
 		case len(downloads) == 1:
 			fmt.Printf("One download link found. (%v, %v)\n", downloads[0].Title, downloads[0].Format)
-			if ynPrompt("Download? (y/n)") == true {
-				scanner.Scan()
-				download(downloads[0], scanner.Text())
+			if ynPrompt("Download? (y/n) ") == true {
+				downloadsPrompt(0, downloads)
 			}
 		default:
 			var number int
@@ -296,10 +333,7 @@ competitionid:id lists games in a competition with the given id. `);
 				}
 				break
 			}
-
-			fmt.Printf("File path? (default: '/mnt/us/extensions/Gargoyle/games/%v", downloads[number].Title)
-			scanner.Scan()
-			download(downloads[number], scanner.Text())
+			downloadsPrompt(number, downloads)
 		}		
 	}
 }
