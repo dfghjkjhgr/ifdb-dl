@@ -58,7 +58,7 @@ func filter[T comparable](s []T, f func(T) bool) []T {
 	return acc
 }
 
-//
+// 
 func validatedPrompt(prompt string, f func(string) (string, error)) string {
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Print(prompt)
@@ -101,8 +101,25 @@ func download(link Link, path string) {
 	}
 }
 
+func ynPrompt(prompt string) bool {
+	fmt.Printf(prompt)
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	for {
+		text := strings.ToLower(scanner.Text())
+		switch {
+		case text == "y" || text == "yes":
+			return true
+		case text == "n" || text == "no":
+			return false
+		default:
+			fmt.Printf("Please enter yes or no: ")
+			scanner.Scan()
+		}
+	}
+}
+
 func searchPrompt(list SearchGamesList) (string, error) {
-	// TODO: Implement paging
 	switch {
 	case len(list.Games) >= 10:
 		fmt.Println("Too many options, only showing first 10 results:")
@@ -176,10 +193,64 @@ func main() {
 
 	switch firstOption {
 	case "-h", "--help", "help":
-		fmt.Println("ifdb-dl: download your favorite IFDB games through the terminal!\nThis is an interactive program, call the executable without arguments to begin.");
+		fmt.Println(`ifdb-dl: download your favorite IFDB games through the terminal!
+This is an interactive program, call the executable without arguments to begin.
+IFDB search syntax:
++word makes word mandatory - only items that contain this word will be listed.
+
+-word makes word prohibited - only items that don't contain this word will be listed.
+
+"phrase" searches for the exact phrase within the quotes: all of the words have to be matched in the exact order given.
+
+author:name lists games by the named author or authors.
+
+tag:tag name searches for games containing the given tag text. (What's a tag?)
+Go to the IFDB tag list
+
+series:name lists only games with the given series name.
+Show all series names appearing in game listings
+
+genre:genre name only shows games with the given genre. If a game's listing has multiple genres, it will match as long as genre name is found within the listing. For example, genre:western will match a game listed with genre "Science Fiction/Western/Romance."
+Show all genres used in game listings
+
+rating:low-high lists games with average ratings in the given range (inclusive). For example, rating:2.5-3.5 lists games rated from 2½ to 3½ stars. Leave out an endpoint for an open-ended search: rating:3- lists games with ratings 3 stars and above; rating:-2 lists games rated 2 stars and below.
+
+#ratings:low-high lists games with a total number of ratings in the given range. For example, #ratings:3- lists games with three or more ratings.
+
+ratingdev:low-high lists games with a ratings standard deviation in the given range.
+
+#reviews:low-high lists games with a total number of member reviews in the given range. (This doesn't count editorial reviews.)
+
+forgiveness:rating only shows games with the given "forgiveness" rating (on the Zarfian scale: Merciful, Polite, Tough, Nasty, Cruel - more information).
+
+published:year-year only shows games with publication dates in the given range. For example, published:1990-2000 shows games published from 1990 to 2000. published:1990 lists only games published in 1990. published:1990- lists games published in 1990 or later, and published:-2000 lists games published in 2000 or earlier. You can also search for games published within the last few days. published:30d- searches for games published within the last 30 days. published:90d-30d searches for games published within the last 90 days, but more than 30 days ago.
+
+added:year-year only shows games with listings added to the database on dates in the given range. For example, added:2007-2020 shows games added from 2007 to 2020. added:2007 shows games added in 2007. added:2007- shows games added in 2007 or later, and added:-2020 shows games added in 2020 or earlier. You can also search for games added within the last few days. added:30d- searches for games added within the last 30 days. added:90d-30d searches for games added within the last 90 days, but more than 30 days ago.
+
+language:code lists games written in the given spoken language. You can use the English name of the language, or a two- or three-letter ISO-639 code ("en" for English, "fr" for French, etc).
+
+system:name lists only games written with the given authoring system (TADS, Inform, Hugo, etc).
+
+format:name lists only games with downloadable files available for the given format. To search for multiple system versions, use * as a wildcard: format:tads * searches for all TADS versions. Use an operating system name to search for native executables for that system.
+
+downloadable:yes|no lists games that are/are not downloadable. A downloadable game is one that has at least one story file or application download link.
+
+playtime:minimum-maximum lists games with an estimated play time in the given range. After each number, use h for hours or m for minutes. For example, playtime:2h15m-3h shows games with an estimated play time of anywhere from 2 hours and 15 minutes to 3 hours. Hours may include decimals (for example, 3.5h). playtime:1.5h- lists games with an estimated play time of at least 1 and a half hours. playtime:-45m lists games with an estimated play time of 45 minutes or less. playtime:1h searches for games with an estimated play time of 1 hour. playtime: with no text after it searches for games with no estimated play time.
+
+bafs:id searches for the game with the given Baf's Guide ID.
+
+ifid:xxx searches for a game with the given IFID.
+
+tuid:xxx searches for a game with the given TUID.
+
+authorid:id lists games by the author with the given id.
+
+competitionid:id lists games in a competition with the given id. `);
 	default:
 		// Get API data from server
-		gameTUID, err := searchPrompt(gameSearch(firstOption));
+		scanner := bufio.NewScanner(os.Stdin)
+		fmt.Println("WELCOME TO IFDB-DL! Download your favorite IF games here! Type in your search or Ctrl-C to exit.")
+		gameTUID, err := searchPrompt(gameSearch(Scanner.Scan().Text()));
 		if err != nil {
 			// if the program ends, that means that we didn't find any results...
 			return;
@@ -200,15 +271,16 @@ func main() {
 		downloads := filter(game.Ifdb.Downloads.Links, func (l Link) bool {
 			return l.IsGame
 		})
-		scanner := bufio.NewScanner(os.Stdin)			
+		
 		switch {
 		case len(downloads) == 0:
 			fmt.Println("No download links found... :(")
 		case len(downloads) == 1:
 			fmt.Printf("One download link found. (%v, %v)\n", downloads[0].Title, downloads[0].Format)
-			fmt.Println("Please enter the full path where the file should go, including the file name: ")
-			scanner.Scan()
-			download(downloads[0], scanner.Text())
+			if ynPrompt("Download? (y/n)") == true {
+				scanner.Scan()
+				download(downloads[0], scanner.Text())
+			}
 		default:
 			var number int
 			fmt.Println("There are multiple downloads avaliable:");
@@ -225,7 +297,7 @@ func main() {
 				break
 			}
 
-			fmt.Println("Please enter the path where the file should go, including the file name:")
+			fmt.Printf("File path? (default: '/mnt/us/extensions/Gargoyle/games/%v", downloads[number].Title)
 			scanner.Scan()
 			download(downloads[number], scanner.Text())
 		}		

@@ -1,5 +1,5 @@
 {
 	"items": [
-		{"name": "KindleFetch", "action": "sh run.sh"}
+		{"name": "IFDB-DL", "action": "/mnt/us/extensions/kterm/bin/kterm -e \"/mnt/us/extensions/ifdb-dl-tool/ifdb-dl\" -k 1 -o U -s 7"}
 	]
 }
