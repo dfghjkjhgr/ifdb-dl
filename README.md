@@ -7,10 +7,11 @@ interpreter for Kindle.
 ## Download
 
 Obviously you need to jailbreak your kindle first before using this.
-Kterm is also a requirement.  In any case, use ./make-release.sh to generate the latest release or use a
-pre-built one.  Unzip the file and drag to /mnt/us/extensions on your
-Kindle. Enjoy!
+Kterm is also a requirement.  In any case, use ./make-release.sh to
+generate the latest release or use the ones in the releases tab.  
+Unzip the file and drag to /mnt/us/extensions on your Kindle. Enjoy!
 
 # TODO 
 
 - [ ] Make code less ugly...
+- [ ] KPM support
