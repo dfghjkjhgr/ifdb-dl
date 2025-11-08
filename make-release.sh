@@ -1,8 +1,9 @@
 #!/usr/bin/sh
-rm -r ifdb-dl-tool
-rm ifdb-dl.zip
-
 set -e
+
+rm -rf ifdb-dl-tool
+rm -f ifdb-dl.zip
+
 GOOS=linux GOARCH=arm GOARM=5 go build
 
 # Makes our lives easier

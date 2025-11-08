@@ -60,6 +60,11 @@ func filter[T comparable](s []T, f func(T) bool) []T {
 	return acc
 }
 
+func isCompressed(urlStr string) bool {
+	downloadUrl, _ := url.Parse(urlStr)
+	return strings.HasSuffix(path.Base(downloadUrl.Path), ".zip") || strings.HasSuffix(path.Base(downloadUrl.Path), ".tar.gz")
+}
+	
 func downloadsPrompt(number int, downloads []Link) {
 	scanner := bufio.NewScanner(os.Stdin)
 	downloadUrl, _ := url.Parse(downloads[number].Url) // If it doesn't parse we'll probably have strange problems down the line
@@ -70,14 +75,18 @@ func downloadsPrompt(number int, downloads []Link) {
 	if name == "" {
 		name = defaultFileName
 	}	
-	fmt.Printf("File path? (default: '/mnt/us/extensions/gargoyle/games/) ")
+	fmt.Printf("File path? (default: '/mnt/us/extensions/gargoyle/games') ")
 	scanner.Scan()
 	filePath := scanner.Text()
 	if filePath == "" {
-		filePath = "/mnt/us/extensions/gargoyle/games/"
+		filePath = "/mnt/us/extensions/gargoyle/games"
 	}	
-	download(downloads[number], path.Join(filePath, name))
-	fmt.Println("Downloaded! Exiting in 5 seconds")
+	err := download(downloads[number], path.Join(filePath, name))
+	if err != nil {
+		fmt.Println("Failed to download file. Does the directory exist? Do you have enough storage?");
+	} else {
+		fmt.Printf("Downloaded! Your game is located at %v/%v\n", filePath, name);
+	}
 	time.Sleep(5 * time.Second);
 }
 // 
@@ -99,28 +108,30 @@ func gameSearch(term string) SearchGamesList {
 	query := "https://ifdb.org/search?json&" + url.Values{"searchfor": {term}}.Encode()
 	res, err := http.Get(query)
 	if err != nil {
-		log.Fatal("Could not connect to wifi");
+		log.Print("Could not connect to wifi... Do you have airplane mode on?");
+		time.Sleep(5 * time.Second);
+		os.Exit(1)
 	}
 	body, err := io.ReadAll(res.Body)
 	if res.StatusCode > 299 {
-		log.Fatalf("Response failed with status code: %d and\nbody: %s\n", res.StatusCode, body)
+		log.Printf("Response failed with status code: %d and\nbody: %s\n", res.StatusCode, body)
+		time.Sleep(5 * time.Second);
+		os.Exit(1)
 	}
 	// Parse the JSON
 	var list SearchGamesList
 	err = json.Unmarshal(body, &list)
 	if err != nil {
 		fmt.Println("error:", err)
+		time.Sleep(5 * time.Second);
 	}
 	return list
 }
 	
-func download(link Link, path string) {
+func download(link Link, path string) error {
 	res, _ := http.Get(link.Url)
 	body, _ := io.ReadAll(res.Body)
-	err := os.WriteFile(path, body, 0666)
-	if err != nil {
-		fmt.Println("Failed to download file: do you have enough storage?")
-	}
+	return os.WriteFile(path, body, 0666)
 }
 
 func ynPrompt(prompt string) bool {
@@ -155,10 +166,10 @@ func searchPrompt(list SearchGamesList) (string, error) {
 		fmt.Println("Too many options, only showing first 10 results:")
 		fmt.Println("(Use N and P to page)");
 	case len(list.Games) == 0:
-		fmt.Println("No search results found.")
 		return "", fmt.Errorf("No search results found.")
 	default:
 		fmt.Println("Search results: ")
+		fmt.Println("(Generally Inform, TADS, Hugo, and ADRIFT games should be supported by Gargoyle)")
 	}
 	pagePlace := 0
 	max := pagePlace + 10
@@ -287,8 +298,7 @@ competitionid:id lists games in a competition with the given id. `);
 | $$| $$_/    | $$  | $$| $$__  $$
 | $$| $$      | $$  | $$| $$  \ $$
 | $$| $$      | $$$$$$$/| $$$$$$$/
-|__/|__/      |_______/ |_______/ 
-                                       
+|__/|__/      |_______/ |_______/                                        
                                   
          /$$$$$$$  /$$       /$$  
         | $$__  $$| $$      | $$  
@@ -299,21 +309,22 @@ competitionid:id lists games in a competition with the given id. `);
         | $$$$$$$/| $$$$$$$$ /$$  
         |_______/ |________/|__/  
 
-
+By dfghjkjhgr | Version 1.0.1 | https://github.com/dfghjkjhgr/ifdb-dl
 `)
 		fmt.Println("WELCOME TO IFDB-DL! Download your favorite IF games here! Type in your search or Ctrl-C to exit.")
 		scanner.Scan()
 		gameTUID, err := searchPrompt(gameSearch(scanner.Text()));
 		if err != nil {
-			fmt.Println("No results found... exiting in 5 seconds. \
-Try a broader search term. Or perhaps you have Airplane Mode on?")
-			time.Sleep(5 * time.Seconds)
+			fmt.Println(`No results found... exiting in 5 seconds.
+Try a broader search term.`)
+			time.Sleep(5 * time.Second)
 			return;
 		}
 		query2 := "https://ifdb.org/viewgame?json&" + url.Values{"id": {gameTUID}}.Encode()
-		res2, err := http.Get(query2)	
+		res2, err := http.Get(query2)
 		if err != nil {
 			log.Fatal("Something went wrong with getting the game.");
+			time.Sleep(5 * time.Second);
 		}
 		
 		var game ViewGame
@@ -331,7 +342,7 @@ Try a broader search term. Or perhaps you have Airplane Mode on?")
 		case len(downloads) == 0:
 			fmt.Println("No download links found... :(")
 		case len(downloads) == 1:
-			fmt.Printf("One download link found. (%v, %v)\n", downloads[0].Title, downloads[0].Format)
+			fmt.Printf("One download link found. (%v, %v, Compressed: %v)\n", downloads[0].Title, downloads[0].Format, isCompressed(downloads[0].Url))
 			if ynPrompt("Download? (y/n) ") == true {
 				downloadsPrompt(0, downloads)
 			}
@@ -339,7 +350,7 @@ Try a broader search term. Or perhaps you have Airplane Mode on?")
 			var number int
 			fmt.Println("There are multiple downloads avaliable:");
 			for i := 0; i < len(downloads); i++ {
-				fmt.Printf("(%v): %v (%v)\n", i, downloads[i].Title, downloads[i].Format)
+				fmt.Printf("(%v): %v (%v, Compressed: %v)\n", i, downloads[i].Title, downloads[i].Format, isCompressed(downloads[i].Url)) 
 			}
 			for {	
 				fmt.Print("Which one do you wish to download?: ")
