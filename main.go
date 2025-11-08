@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"path"
+	"time"
 )
 
 type SearchGame struct {
@@ -76,6 +77,8 @@ func downloadsPrompt(number int, downloads []Link) {
 		filePath = "/mnt/us/extensions/gargoyle/games/"
 	}	
 	download(downloads[number], path.Join(filePath, name))
+	fmt.Println("Downloaded! Exiting in 5 seconds")
+	time.Sleep(5 * time.Second);
 }
 // 
 func validatedPrompt(prompt string, f func(string) (string, error)) string {
@@ -302,7 +305,9 @@ competitionid:id lists games in a competition with the given id. `);
 		scanner.Scan()
 		gameTUID, err := searchPrompt(gameSearch(scanner.Text()));
 		if err != nil {
-			// if the program ends, that means that we didn't find any results...
+			fmt.Println("No results found... exiting in 5 seconds. \
+Try a broader search term. Or perhaps you have Airplane Mode on?")
+			time.Sleep(5 * time.Seconds)
 			return;
 		}
 		query2 := "https://ifdb.org/viewgame?json&" + url.Values{"id": {gameTUID}}.Encode()
