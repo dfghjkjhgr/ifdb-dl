@@ -70,6 +70,14 @@ func isCompressed(urlStr string) bool {
 	return strings.HasSuffix(path.Base(downloadUrl.Path), ".zip") || strings.HasSuffix(path.Base(downloadUrl.Path), ".tar.gz")
 }
 	
+// Gargoyle exports its games folder as GAMES, which is not under extensions/ on every install
+func defaultGamesPath() string {
+	if gamesPath := os.Getenv("GAMES"); gamesPath != "" {
+		return gamesPath
+	}
+	return "/mnt/us/extensions/gargoyle/games"
+}
+
 func downloadsPrompt(number int, downloads []Link) {
 	scanner := bufio.NewScanner(os.Stdin)
 	downloadUrl, _ := url.Parse(downloads[number].Url) // If it doesn't parse we'll probably have strange problems down the line
@@ -80,11 +88,12 @@ func downloadsPrompt(number int, downloads []Link) {
 	if name == "" {
 		name = defaultFileName
 	}	
-	fmt.Printf("File path? (default: '/mnt/us/extensions/gargoyle/games') ")
+	defaultFilePath := defaultGamesPath()
+	fmt.Printf("File path? (default: '%v') ", defaultFilePath)
 	scanner.Scan()
 	filePath := scanner.Text()
 	if filePath == "" {
-		filePath = "/mnt/us/extensions/gargoyle/games"
+		filePath = defaultFilePath
 	}	
 	location, err := download(downloads[number], path.Join(filePath, name), name == defaultFileName)
 	if err != nil {
