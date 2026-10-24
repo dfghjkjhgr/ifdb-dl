@@ -1,7 +1,11 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
+	"errors"
+	"mime"
 	"net/http"
 	"fmt"
 	"os"
@@ -12,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"path"
+	"path/filepath"
 	"time"
 )
 
@@ -81,11 +86,11 @@ func downloadsPrompt(number int, downloads []Link) {
 	if filePath == "" {
 		filePath = "/mnt/us/extensions/gargoyle/games"
 	}	
-	err := download(downloads[number], path.Join(filePath, name))
+	location, err := download(downloads[number], path.Join(filePath, name), name == defaultFileName)
 	if err != nil {
-		fmt.Println("Failed to download file. Does the directory exist? Do you have enough storage?");
+		fmt.Println("Failed to download file:", err);
 	} else {
-		fmt.Printf("Downloaded! Your game is located at %v/%v\n", filePath, name);
+		fmt.Printf("Downloaded! Your game is located at %v\n", location);
 	}
 	time.Sleep(5 * time.Second);
 }
@@ -128,10 +133,74 @@ func gameSearch(term string) SearchGamesList {
 	return list
 }
 	
-func download(link Link, path string) error {
-	res, _ := http.Get(link.Url)
-	body, _ := io.ReadAll(res.Body)
-	return os.WriteFile(path, body, 0666)
+// Downloads a game to target and returns where it was saved. The name the
+// server gives replaces a default name, which download scripts make
+// meaningless. Zip archives are extracted into a folder of the same name,
+// since interpreters cannot open them.
+func download(link Link, target string, serverName bool) (string, error) {
+	res, err := http.Get(link.Url)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	// Some hosts answer with a page, such as a browser check, instead of the file.
+	if strings.HasPrefix(res.Header.Get("Content-Type"), "text/html") {
+		return "", errors.New("the server sent a web page instead of the game, download it from a computer")
+	}
+	if res.StatusCode > 299 {
+		return "", fmt.Errorf("the server answered %v", res.Status)
+	}
+	if _, params, err := mime.ParseMediaType(res.Header.Get("Content-Disposition")); err == nil && serverName && params["filename"] != "" {
+		target = filepath.Join(filepath.Dir(target), filepath.Base(params["filename"]))
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+	if bytes.HasPrefix(body, []byte("PK\x03\x04")) {
+		folder := strings.TrimSuffix(target, filepath.Ext(target))
+		return folder, unzip(body, folder)
+	}
+	return target, os.WriteFile(target, body, 0666)
+}
+
+func unzip(data []byte, folder string) error {
+	archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return err
+	}
+
+	for _, file := range archive.File {
+		target := filepath.Join(folder, file.Name)
+		if !strings.HasPrefix(target, filepath.Clean(folder)+string(os.PathSeparator)) {
+			return fmt.Errorf("the archive has a file outside its folder: %v", file.Name)
+		}
+		if file.FileInfo().IsDir() {
+			if err := os.MkdirAll(target, 0777); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0777); err != nil {
+			return err
+		}
+
+		reader, err := file.Open()
+		if err != nil {
+			return err
+		}
+		content, err := io.ReadAll(reader)
+		reader.Close()
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, content, 0666); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func ynPrompt(prompt string) bool {
